@@ -2088,5 +2088,8 @@ window.addEventListener('beforeinstallprompt', (e) => {
         });
     }
 });
-
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("DOM loaded");
+    initSocket();
+});
 // ========== END OF SCRIPT.JS ==========
