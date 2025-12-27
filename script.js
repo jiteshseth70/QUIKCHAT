@@ -5,7 +5,7 @@
 const config = {
     appName: 'QuikChat Global',
     version: '2.0.0',
-    socketServer: 'https://your-socket-server.com',
+    socketServer: undefined
     iceServers: {
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
