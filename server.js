@@ -1,262 +1,258 @@
-/* ========== QUIKCHAT GLOBAL - MINIMAL SERVER ========== */
 require('dotenv').config();
-
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
-const path = require('path');
+const admin = require('firebase-admin');
 const helmet = require('helmet');
+const path = require('path');
 
-// Initialize app
+// Initialize Firebase
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
+
+if (Object.keys(serviceAccount).length > 0) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: process.env.FIREBASE_DATABASE_URL
+  });
+}
+
+const db = admin.database();
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"]
-  },
-  transports: ['websocket', 'polling']
+  }
 });
 
-// Security middleware
-app.use(helmet({
-  contentSecurityPolicy: false // For development, enable in production
-}));
+// Middleware
+app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Store active users and calls
-const activeUsers = new Map(); // socket.id -> user data
-const userSockets = new Map(); // user.id -> socket.id
-const activeCalls = new Map(); // callId -> call data
+// Store active users
+const activeUsers = new Map();
+const waitingUsers = [];
+const activeCalls = new Map();
 
-// ========== SOCKET.IO HANDLERS ==========
-io.on('connection', (socket) => {
-  console.log('✅ User connected:', socket.id);
-  
-  // Register user
-  socket.on('register', (userData) => {
-    try {
-      const user = {
-        id: userData.id || `user_${Date.now()}`,
-        socketId: socket.id,
-        username: userData.username,
-        gender: userData.gender,
-        country: userData.country,
-        age: userData.age,
-        isOnline: true
-      };
-      
-      activeUsers.set(socket.id, user);
-      userSockets.set(user.id, socket.id);
-      
-      socket.emit('user:registered', { user });
-      
-      // Join user to personal room
-      socket.join(`user:${user.id}`);
-      
-      console.log(`👤 User registered: ${user.username}`);
-    } catch (error) {
-      socket.emit('error', { message: 'Registration failed' });
-    }
-  });
-  
-  // Find random partner
-  socket.on('find:partner', (data) => {
-    try {
-      const currentUser = activeUsers.get(socket.id);
-      if (!currentUser) return;
-      
-      // Get all online users except current
-      const availableUsers = Array.from(activeUsers.values())
-        .filter(user => 
-          user.socketId !== socket.id && 
-          user.isOnline
-        );
-      
-      if (availableUsers.length === 0) {
-        socket.emit('partner:not-found', { message: 'No users online' });
-        return;
-      }
-      
-      // Apply filters
-      let filteredUsers = availableUsers;
-      
-      if (data.gender && data.gender !== 'both') {
-        filteredUsers = filteredUsers.filter(u => u.gender === data.gender);
-      }
-      
-      if (data.country) {
-        filteredUsers = filteredUsers.filter(u => u.country === data.country);
-      }
-      
-      // If no filtered users, use all available
-      if (filteredUsers.length === 0) {
-        filteredUsers = availableUsers;
-      }
-      
-      // Select random partner
-      const randomPartner = filteredUsers[Math.floor(Math.random() * filteredUsers.length)];
-      
-      // Create call session
-      const callId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      const callData = {
-        id: callId,
-        user1: currentUser.id,
-        user2: randomPartner.id,
-        status: 'connecting',
-        createdAt: new Date().toISOString()
-      };
-      
-      activeCalls.set(callId, callData);
-      
-      // Notify both users
-      socket.emit('partner:found', {
-        partner: randomPartner,
-        callId: callId
-      });
-      
-      const partnerSocket = io.sockets.sockets.get(randomPartner.socketId);
-      if (partnerSocket) {
-        partnerSocket.emit('partner:found', {
-          partner: currentUser,
-          callId: callId
-        });
-      }
-      
-    } catch (error) {
-      socket.emit('error', { message: 'Failed to find partner' });
-    }
-  });
-  
-  // WebRTC signaling
-  socket.on('webrtc:offer', (data) => {
-    const { to, offer, callId } = data;
-    const receiverSocketId = userSockets.get(to);
-    
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit('webrtc:offer', {
-        from: socket.id,
-        offer: offer,
-        callId: callId
-      });
-    }
-  });
-  
-  socket.on('webrtc:answer', (data) => {
-    const { to, answer } = data;
-    const receiverSocketId = userSockets.get(to);
-    
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit('webrtc:answer', {
-        from: socket.id,
-        answer: answer
-      });
-    }
-  });
-  
-  socket.on('webrtc:ice-candidate', (data) => {
-    const { to, candidate } = data;
-    const receiverSocketId = userSockets.get(to);
-    
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit('webrtc:ice-candidate', {
-        from: socket.id,
-        candidate: candidate
-      });
-    }
-  });
-  
-  // Chat messages
-  socket.on('chat:message', (data) => {
-    const { to, message } = data;
-    const receiverSocketId = userSockets.get(to);
-    
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit('chat:message', {
-        from: socket.id,
-        message: message,
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
-  
-  // End call
-  socket.on('call:end', (data) => {
-    const { callId } = data;
-    const call = activeCalls.get(callId);
-    
-    if (call) {
-      // Notify both users
-      const user1Socket = userSockets.get(call.user1);
-      const user2Socket = userSockets.get(call.user2);
-      
-      if (user1Socket) {
-        io.to(user1Socket).emit('call:ended', { callId });
-      }
-      if (user2Socket) {
-        io.to(user2Socket).emit('call:ended', { callId });
-      }
-      
-      // Remove from active calls
-      activeCalls.delete(callId);
-    }
-  });
-  
-  // Disconnection
-  socket.on('disconnect', () => {
-    console.log('❌ User disconnected:', socket.id);
-    
-    const user = activeUsers.get(socket.id);
-    if (user) {
-      activeUsers.delete(socket.id);
-      userSockets.delete(user.id);
-      
-      // End any active calls
-      activeCalls.forEach((call, callId) => {
-        if (call.user1 === user.id || call.user2 === user.id) {
-          const otherUserId = call.user1 === user.id ? call.user2 : call.user1;
-          const otherSocketId = userSockets.get(otherUserId);
-          
-          if (otherSocketId) {
-            io.to(otherSocketId).emit('call:ended', { 
-              callId,
-              reason: 'Partner disconnected'
-            });
-          }
-          
-          activeCalls.delete(callId);
-        }
-      });
-    }
-  });
-});
-
-// Health check endpoint
-app.get('/health', (req, res) => {
+// API Routes
+app.get('/api/stats', (req, res) => {
   res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    onlineUsers: activeUsers.size,
-    activeCalls: activeCalls.size
+    online: activeUsers.size,
+    activeCalls: activeCalls.size,
+    waiting: waitingUsers.length
   });
 });
 
-// Serve index.html for all routes
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+app.post('/api/create-payment', async (req, res) => {
+  const { userId, amount } = req.body;
+  
+  // Razorpay integration placeholder
+  const order = {
+    id: `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    amount: amount * 100, // in paise
+    currency: 'INR'
+  };
+  
+  res.json(order);
 });
 
-// Start server
+// Socket.IO Events
+io.on('connection', (socket) => {
+  console.log('New user connected:', socket.id);
+  
+  socket.on('register-user', async (userData) => {
+    const { fingerprint, username, age, country, bio, photo, gender, isModel, perMinuteRate } = userData;
+    
+    const user = {
+      socketId: socket.id,
+      userId: fingerprint,
+      username,
+      age,
+      country,
+      bio,
+      photo,
+      gender,
+      isModel: isModel || false,
+      perMinuteRate: perMinuteRate || 0,
+      balance: 0,
+      earnings: 0,
+      joinedAt: Date.now(),
+      isOnline: true
+    };
+    
+    // Save to active users
+    activeUsers.set(socket.id, user);
+    
+    // Save to Firebase
+    try {
+      await db.ref(`users/${fingerprint}`).set(user);
+    } catch (err) {
+      console.error('Firebase save error:', err);
+    }
+    
+    socket.emit('user-registered', user);
+    io.emit('online-count', activeUsers.size);
+  });
+  
+  socket.on('find-random-match', async (preferences) => {
+    const user = activeUsers.get(socket.id);
+    if (!user) return;
+    
+    // Remove from waiting if already there
+    const index = waitingUsers.indexOf(socket.id);
+    if (index > -1) waitingUsers.splice(index, 1);
+    
+    // Add to waiting list
+    waitingUsers.push(socket.id);
+    
+    // Try to find match
+    findMatch(socket.id, preferences);
+  });
+  
+  socket.on('request-private-chat', async (data) => {
+    const { toUserId, coinsPerMinute } = data;
+    const fromUser = activeUsers.get(socket.id);
+    
+    // Find target user's socket
+    let targetSocketId = null;
+    for (let [sid, user] of activeUsers) {
+      if (user.userId === toUserId) {
+        targetSocketId = sid;
+        break;
+      }
+    }
+    
+    if (targetSocketId && fromUser) {
+      io.to(targetSocketId).emit('private-request', {
+        fromUser: {
+          userId: fromUser.userId,
+          username: fromUser.username,
+          age: fromUser.age,
+          country: fromUser.country,
+          photo: fromUser.photo
+        },
+        coinsPerMinute: coinsPerMinute,
+        requestId: `req_${Date.now()}`
+      });
+    }
+  });
+  
+  socket.on('accept-private-chat', async (data) => {
+    const { requestId, fromUserId, coinsPerMinute } = data;
+    const modelUser = activeUsers.get(socket.id);
+    
+    // Find requester's socket
+    let requesterSocketId = null;
+    for (let [sid, user] of activeUsers) {
+      if (user.userId === fromUserId) {
+        requesterSocketId = sid;
+        break;
+      }
+    }
+    
+    if (requesterSocketId && modelUser) {
+      // Create private room
+      const roomId = `private_${fromUserId}_${modelUser.userId}`;
+      
+      // Join both to room
+      socket.join(roomId);
+      io.sockets.sockets.get(requesterSocketId)?.join(roomId);
+      
+      // Notify both
+      io.to(roomId).emit('private-chat-started', {
+        roomId,
+        coinsPerMinute,
+        modelUser,
+        startedAt: Date.now()
+      });
+      
+      // Track call
+      activeCalls.set(roomId, {
+        roomId,
+        modelId: modelUser.userId,
+        userId: fromUserId,
+        coinsPerMinute,
+        startedAt: Date.now(),
+        coinsDeducted: 0
+      });
+    }
+  });
+  
+  socket.on('webrtc-signal', (data) => {
+    const { to, signal } = data;
+    io.to(to).emit('webrtc-signal', {
+      from: socket.id,
+      signal: signal
+    });
+  });
+  
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+    
+    // Remove from active users
+    activeUsers.delete(socket.id);
+    
+    // Remove from waiting
+    const index = waitingUsers.indexOf(socket.id);
+    if (index > -1) waitingUsers.splice(index, 1);
+    
+    io.emit('online-count', activeUsers.size);
+  });
+});
+
+// Matchmaking function
+function findMatch(socketId, preferences) {
+  if (waitingUsers.length < 2) return;
+  
+  const user1 = activeUsers.get(socketId);
+  if (!user1) return;
+  
+  // Find compatible match
+  for (let i = 0; i < waitingUsers.length; i++) {
+    const otherId = waitingUsers[i];
+    if (otherId === socketId) continue;
+    
+    const user2 = activeUsers.get(otherId);
+    if (!user2) continue;
+    
+    // Check preferences
+    if (preferences.gender && preferences.gender !== 'any') {
+      if (preferences.gender !== user2.gender) continue;
+    }
+    
+    if (preferences.country && preferences.country !== 'any') {
+      if (preferences.country !== user2.country) continue;
+    }
+    
+    // Found match - create room
+    const roomId = `room_${socketId}_${otherId}`;
+    
+    // Remove both from waiting
+    const index1 = waitingUsers.indexOf(socketId);
+    const index2 = waitingUsers.indexOf(otherId);
+    if (index1 > -1) waitingUsers.splice(index1, 1);
+    if (index2 > -1) waitingUsers.splice(index2, 1);
+    
+    // Join room
+    io.sockets.sockets.get(socketId)?.join(roomId);
+    io.sockets.sockets.get(otherId)?.join(roomId);
+    
+    // Send match info
+    io.to(roomId).emit('match-found', {
+      roomId,
+      user1: user1,
+      user2: user2
+    });
+    
+    break;
+  }
+}
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`
-  🚀 QuikChat Global Server Started
-  📍 Port: ${PORT}
-  🌐 URL: http://localhost:${PORT}
-  ⏰ Time: ${new Date().toLocaleTimeString()}
-  `);
+  console.log(`Server running on port ${PORT}`);
 });
