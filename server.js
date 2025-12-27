@@ -14,7 +14,11 @@ const io = socketIo(server, {
 });
 
 app.use(cors());
-app.use(express.static('public'));
+app.use(express.static(__dirname));
+
+app.get('/', (req, res) => {
+    res.sendFile(__dirname + '/index.html');
+});
 
 const users = new Map();
 const rooms = new Map();
