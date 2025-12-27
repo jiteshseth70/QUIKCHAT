@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Dashboard - QuikChat Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-chart-line"></i>
+                <h1>Model Dashboard</h1>
+            </div>
+            <div class="stats">
+                <a href="index.html" class="btn-secondary">
+                    <i class="fas fa-home"></i> Back to Chat
+                </a>
+            </div>
+        </header>
+
+        <div class="main-content" style="grid-template-columns: 1fr;">
+            <!-- Earnings Overview -->
+            <div class="earnings-overview">
+                <div class="earnings-card">
+                    <h3><i class="fas fa-wallet"></i> Available Balance</h3>
+                    <h1 id="availableBalance">₹0</h1>
+                    <p>Ready to withdraw</p>
+                </div>
+                
+                <div class="earnings-card">
+                    <h3><i class="fas fa-chart-bar"></i> Total Earnings</h3>
+                    <h1 id="totalEarnings">₹0</h1>
+                    <p>All-time earnings</p>
+                </div>
+                
+                <div class="earnings-card">
+                    <h3><i class="fas fa-clock"></i> Today's Earnings</h3>
+                    <h1 id="todayEarnings">₹0</h1>
+                    <p id="todayTime">0 minutes today</p>
+                </div>
+            </div>
+
+            <!-- Withdrawal Section -->
+            <div class="withdrawal-section">
+                <h2><i class="fas fa-rupee-sign"></i> Withdraw Earnings</h2>
+                <div class="form-group">
+                    <label>Amount (₹)</label>
+                    <input type="number" id="withdrawAmount" placeholder="Enter amount" min="100">
+                </div>
+                <div class="form-group">
+                    <label>UPI ID or Bank Details</label>
+                    <input type="text" id="withdrawDetails" placeholder="yourname@upi or Bank Account">
+                </div>
+                <button id="requestWithdrawalBtn" class="btn-success">
+                    <i class="fas fa-paper-plane"></i> Request Withdrawal
+                </button>
+                <p class="note">Withdrawals processed within 24 hours. Minimum ₹100.</p>
+            </div>
+
+            <!-- Recent Calls -->
+            <div class="recent-calls">
+                <h2><i class="fas fa-history"></i> Recent Calls</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Duration</th>
+                            <th>User</th>
+                            <th>Earnings</th>
+                        </tr>
+                    </thead>
+                    <tbody id="callsTable">
+                        <!-- Filled by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Settings -->
+            <div class="model-settings">
+                <h2><i class="fas fa-cog"></i> Model Settings</h2>
+                <div class="form-group">
+                    <label>Per Minute Rate (coins)</label>
+                    <select id="modelRate">
+                        <option value="10">10 coins (₹7/min)</option>
+                        <option value="20">20 coins (₹14/min)</option>
+                        <option value="30">30 coins (₹21/min)</option>
+                        <option value="50">50 coins (₹35/min)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Availability Status</label>
+                    <select id="availabilityStatus">
+                        <option value="available">Available for Calls</option>
+                        <option value="busy">Busy (Accepting only private)</option>
+                        <option value="offline">Appear Offline</option>
+                    </select>
+                </div>
+                <button id="updateSettingsBtn" class="btn-primary">
+                    <i class="fas fa-save"></i> Update Settings
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get fingerprint from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const fingerprint = urlParams.get('fingerprint');
+        
+        // Load model data
+        async function loadModelData() {
+            if (!fingerprint) {
+                window.location.href = 'index.html';
+                return;
+            }
+            
+            // Load from Firebase (simulated)
+            const userData = localStorage.getItem(`user_${fingerprint}`);
+            if (userData) {
+                const data = JSON.parse(userData);
+                
+                document.getElementById('availableBalance').textContent = `₹${data.balance || 0}`;
+                document.getElementById('totalEarnings').textContent = `₹${data.earnings || 0}`;
+                
+                // Load recent calls
+                loadRecentCalls();
+            }
+        }
+        
+        // Request withdrawal
+        document.getElementById('requestWithdrawalBtn').addEventListener('click', async () => {
+            const amount = document.getElementById('withdrawAmount').value;
+            const details = document.getElementById('withdrawDetails').value;
+            
+            if (!amount || amount < 100) {
+                alert('Minimum withdrawal amount is ₹100');
+                return;
+            }
+            
+            if (!details) {
+                alert('Please enter UPI ID or bank details');
+                return;
+            }
+            
+            // Send withdrawal request
+            const response = await fetch('/api/request-withdrawal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fingerprint: fingerprint,
+                    amount: amount,
+                    details: details
+                })
+            });
+            
+            if (response.ok) {
+                alert(`Withdrawal request of ₹${amount} submitted!`);
+                document.getElementById('withdrawAmount').value = '';
+                document.getElementById('withdrawDetails').value = '';
+            }
+        });
+        
+        // Update settings
+        document.getElementById('updateSettingsBtn').addEventListener('click', async () => {
+            const rate = document.getElementById('modelRate').value;
+            const status = document.getElementById('availabilityStatus').value;
+            
+            // Update in Firebase
+            await fetch('/api/update-model-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fingerprint: fingerprint,
+                    perMinuteRate: rate,
+                    availability: status
+                })
+            });
+            
+            alert('Settings updated!');
+        });
+        
+        // Load data on page load
+        window.addEventListener('DOMContentLoaded', loadModelData);
+    </script>
+</body>
+</html>
