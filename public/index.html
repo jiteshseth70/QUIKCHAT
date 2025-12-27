@@ -2,226 +2,219 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>QuikChat - Random Video Chat</title>
-    <meta name="description" content="Free random 1-on-1 video chat with strangers">
-    <meta name="theme-color" content="#3db0ff">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuikChat Pro - Random Video Chat</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="manifest" href="/manifest.json">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎥</text></svg>">
+    <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js"></script>
 </head>
 <body>
-    <!-- Loading Screen -->
-    <div class="screen active" id="loadingScreen">
-        <div class="loading-content">
-            <div class="logo-large">
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
                 <i class="fas fa-video"></i>
-                <h1>QuikChat</h1>
+                <h1>QuikChat Pro</h1>
             </div>
-            <div class="loading-spinner"></div>
-            <p>Loading your video chat experience...</p>
-        </div>
-    </div>
-
-    <!-- Home Screen -->
-    <div class="screen" id="homeScreen">
-        <div class="container">
-            <header class="app-header">
-                <div class="logo">
-                    <i class="fas fa-video"></i>
-                    <span>QuikChat</span>
-                </div>
-                <div class="stats">
-                    <span id="onlineCount">0</span> online
-                </div>
-            </header>
-
-            <main class="main-content">
-                <div class="hero-section">
-                    <h2>Talk to Strangers!</h2>
-                    <p>Random 1-on-1 video chat with people worldwide</p>
-                    
-                    <div class="action-buttons">
-                        <button class="btn btn-primary btn-lg" id="startVideoChat">
-                            <i class="fas fa-video"></i>
-                            Start Video Chat
-                        </button>
-                        
-                        <button class="btn btn-secondary" id="startTextChat">
-                            <i class="fas fa-comment"></i>
-                            Text Chat Only
-                        </button>
-                    </div>
-                </div>
-
-                <div class="quick-options">
-                    <h3><i class="fas fa-sliders-h"></i> Quick Options</h3>
-                    
-                    <div class="options-grid">
-                        <div class="option-card" data-gender="both">
-                            <i class="fas fa-venus-mars"></i>
-                            <span>Any Gender</span>
-                        </div>
-                        
-                        <div class="option-card" data-gender="male">
-                            <i class="fas fa-mars"></i>
-                            <span>Male Only</span>
-                        </div>
-                        
-                        <div class="option-card" data-gender="female">
-                            <i class="fas fa-venus"></i>
-                            <span>Female Only</span>
-                        </div>
-                    </div>
-                    
-                    <div class="country-selector">
-                        <select id="countrySelect" class="form-select">
-                            <option value="">Any Country</option>
-                            <option value="us">🇺🇸 USA</option>
-                            <option value="in">🇮🇳 India</option>
-                            <option value="gb">🇬🇧 UK</option>
-                            <option value="ca">🇨🇦 Canada</option>
-                            <option value="au">🇦🇺 Australia</option>
-                            <option value="de">🇩🇪 Germany</option>
-                            <option value="fr">🇫🇷 France</option>
-                            <option value="jp">🇯🇵 Japan</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="user-profile" id="userProfile">
-                    <!-- User profile will be loaded here -->
-                </div>
-            </main>
-        </div>
-    </div>
-
-    <!-- Video Chat Screen -->
-    <div class="screen" id="videoChatScreen">
-        <div class="video-container">
-            <div class="video-header">
-                <button class="btn-icon back-btn" id="endCallBtn">
-                    <i class="fas fa-arrow-left"></i>
+            <div class="stats">
+                <span id="onlineCount">0 Online</span>
+                <span id="userCoins">0 Coins</span>
+                <button id="buyCoinsBtn" class="btn-primary">
+                    <i class="fas fa-coins"></i> Buy Coins
                 </button>
-                <div class="call-info">
-                    <h3 id="partnerName">Connecting...</h3>
-                    <p id="callTimer">00:00</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Panel - User Info -->
+            <div class="left-panel">
+                <div class="user-card">
+                    <div class="user-avatar" id="userAvatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <h3 id="userName">Guest</h3>
+                    <p id="userInfo">Not set up yet</p>
+                    
+                    <div class="user-actions">
+                        <button id="setupProfileBtn" class="btn-secondary">
+                            <i class="fas fa-user-edit"></i> Setup Profile
+                        </button>
+                        
+                        <button id="becomeModelBtn" class="btn-success">
+                            <i class="fas fa-crown"></i> Become Model
+                        </button>
+                        
+                        <button id="modelDashboardBtn" class="btn-info" style="display:none;">
+                            <i class="fas fa-chart-line"></i> Model Dashboard
+                        </button>
+                    </div>
                 </div>
-                <div class="call-actions">
-                    <button class="btn-icon" id="toggleChat">
-                        <i class="fas fa-comment"></i>
-                    </button>
+
+                <div class="filters">
+                    <h4><i class="fas fa-filter"></i> Filters</h4>
+                    <select id="genderFilter">
+                        <option value="any">Any Gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                    </select>
+                    <select id="countryFilter">
+                        <option value="any">Any Country</option>
+                        <option value="India">India</option>
+                        <option value="USA">USA</option>
+                        <option value="UK">UK</option>
+                    </select>
                 </div>
             </div>
 
-            <div class="video-wrappers">
-                <div class="remote-video-wrapper">
-                    <video id="remoteVideo" autoplay playsinline></video>
-                    <div class="video-overlay">
-                        <div class="partner-info">
-                            <div class="avatar" id="partnerAvatar">
-                                <i class="fas fa-user"></i>
+            <!-- Center Panel - Video Chat -->
+            <div class="center-panel">
+                <div class="video-container">
+                    <!-- Partner Video -->
+                    <div class="video-wrapper" id="partnerVideoWrapper" style="display:none;">
+                        <video id="partnerVideo" autoplay playsinline></video>
+                        <div class="video-overlay">
+                            <div class="partner-info" id="partnerInfo">
+                                <h3>Connecting...</h3>
                             </div>
-                            <div class="info">
-                                <h4 id="partnerNameOverlay">Stranger</h4>
-                                <p id="partnerCountry">🌍 Connecting...</p>
+                            <div class="video-controls">
+                                <button id="nextBtn" class="btn-control">
+                                    <i class="fas fa-forward"></i> Next
+                                </button>
+                                <button id="privateRequestBtn" class="btn-private" style="display:none;">
+                                    <i class="fas fa-lock"></i> Private Chat
+                                </button>
                             </div>
                         </div>
                     </div>
+
+                    <!-- Your Video -->
+                    <div class="your-video">
+                        <video id="yourVideo" autoplay playsinline muted></video>
+                        <div class="your-info">
+                            <span id="yourName">You</span>
+                        </div>
+                    </div>
+
+                    <!-- Start Chat Button -->
+                    <div class="start-chat" id="startChatSection">
+                        <h2>Start Random Video Chat</h2>
+                        <p>Connect with random people worldwide</p>
+                        <button id="findPartnerBtn" class="btn-primary btn-large">
+                            <i class="fas fa-search"></i> Find Partner
+                        </button>
+                    </div>
                 </div>
 
-                <div class="local-video-wrapper">
-                    <video id="localVideo" autoplay playsinline muted></video>
-                    <div class="local-overlay">
-                        <span>You</span>
+                <!-- Chat Messages -->
+                <div class="chat-box" id="chatBox" style="display:none;">
+                    <div class="chat-messages" id="chatMessages"></div>
+                    <div class="chat-input">
+                        <input type="text" id="messageInput" placeholder="Type a message...">
+                        <button id="sendMessageBtn">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <div class="video-controls">
-                <button class="control-btn" id="toggleVideo">
-                    <i class="fas fa-video"></i>
-                </button>
-                
-                <button class="control-btn" id="toggleAudio">
-                    <i class="fas fa-microphone"></i>
-                </button>
-                
-                <button class="control-btn danger" id="endCall">
-                    <i class="fas fa-phone-slash"></i>
-                </button>
-                
-                <button class="control-btn" id="toggleScreen">
-                    <i class="fas fa-expand"></i>
-                </button>
-                
-                <button class="control-btn" id="swapCamera">
-                    <i class="fas fa-sync-alt"></i>
-                </button>
-            </div>
-
-            <!-- Chat Panel -->
-            <div class="chat-panel" id="chatPanel">
-                <div class="chat-header">
-                    <h4>Chat</h4>
-                    <button class="btn-icon close-chat">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                
-                <div class="chat-messages" id="chatMessages">
-                    <!-- Messages will appear here -->
-                </div>
-                
-                <div class="chat-input">
-                    <input type="text" id="messageInput" placeholder="Type a message...">
-                    <button class="btn btn-primary" id="sendMessage">
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
+            <!-- Right Panel - Online Users -->
+            <div class="right-panel">
+                <h4><i class="fas fa-users"></i> Online Models</h4>
+                <div class="online-list" id="onlineModels">
+                    <div class="loading">Loading...</div>
                 </div>
             </div>
         </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>© 2024 QuikChat Pro | <a href="#" id="privacyLink">Privacy Policy</a> | <a href="#" id="termsLink">Terms</a></p>
+        </footer>
     </div>
 
-    <!-- Toast Container -->
-    <div id="toastContainer"></div>
+    <!-- Modals -->
+    <div id="setupModal" class="modal">
+        <div class="modal-content">
+            <h2><i class="fas fa-user-edit"></i> Setup Your Profile</h2>
+            <div class="form-group">
+                <label>Display Name</label>
+                <input type="text" id="inputName" placeholder="Enter your name">
+            </div>
+            <div class="form-group">
+                <label>Age</label>
+                <input type="number" id="inputAge" placeholder="Your age" min="18" max="99">
+            </div>
+            <div class="form-group">
+                <label>Gender</label>
+                <select id="inputGender">
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Country</label>
+                <input type="text" id="inputCountry" placeholder="Your country">
+            </div>
+            <div class="form-group">
+                <label>Bio</label>
+                <textarea id="inputBio" placeholder="Tell something about yourself..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Profile Photo</label>
+                <input type="file" id="inputPhoto" accept="image/*">
+            </div>
+            <button id="saveProfileBtn" class="btn-primary">Save Profile</button>
+        </div>
+    </div>
 
-    <!-- Scripts -->
-    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <div id="modelModal" class="modal">
+        <div class="modal-content">
+            <h2><i class="fas fa-crown"></i> Become a Model</h2>
+            <p>Set your per-minute rate to start earning money</p>
+            <div class="rate-options">
+                <div class="rate-option" data-rate="10">
+                    <h3>₹10/min</h3>
+                    <p>You earn: ₹7/min</p>
+                </div>
+                <div class="rate-option" data-rate="20">
+                    <h3>₹20/min</h3>
+                    <p>You earn: ₹14/min</p>
+                </div>
+                <div class="rate-option" data-rate="30">
+                    <h3>₹30/min</h3>
+                    <p>You earn: ₹21/min</p>
+                </div>
+            </div>
+            <button id="activateModelBtn" class="btn-success">Activate as Model</button>
+        </div>
+    </div>
+
+    <div id="paymentModal" class="modal">
+        <div class="modal-content">
+            <h2><i class="fas fa-shopping-cart"></i> Buy Coins</h2>
+            <div class="coin-packs">
+                <div class="coin-pack" data-amount="100">
+                    <h3>100 Coins</h3>
+                    <p>₹100</p>
+                </div>
+                <div class="coin-pack" data-amount="550">
+                    <h3>550 Coins</h3>
+                    <p>₹500 (Save ₹50)</p>
+                </div>
+                <div class="coin-pack" data-amount="1200">
+                    <h3>1200 Coins</h3>
+                    <p>₹1000 (Save ₹200)</p>
+                </div>
+            </div>
+            <button id="proceedPaymentBtn" class="btn-primary">Proceed to Payment</button>
+        </div>
+    </div>
+
     <script src="script.js"></script>
-    
-    <!-- PWA Service Worker -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').catch(console.error);
-        }
-        
-        // Create manifest dynamically
-        const manifest = {
-            "name": "QuikChat",
-            "short_name": "QuikChat",
-            "description": "Random Video Chat",
-            "start_url": "/",
-            "display": "standalone",
-            "background_color": "#0b1220",
-            "theme_color": "#3db0ff",
-            "icons": []
-        };
-        
-        // Generate icons
-        const iconSizes = [72, 96, 128, 144, 152, 192, 384, 512];
-        manifest.icons = iconSizes.map(size => ({
-            src: `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22 fill=%22%233db0ff%22>🎥</text></svg>`,
-            sizes: `${size}x${size}`,
-            type: "image/svg+xml",
-            purpose: "any maskable"
-        }));
-        
-        const manifestElement = document.createElement('link');
-        manifestElement.rel = 'manifest';
-        manifestElement.href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(manifest));
-        document.head.appendChild(manifestElement);
-    </script>
 </body>
     </html>
