@@ -1,19 +1,49 @@
-# QuikChat Pro v3.0
+# QUIKCHAT Global - Random 1-on-1 Video Chat
 
-Modern Random Video Chat Platform with Model Earnings System.
+A modern, real-time random video chat application that connects users from around the world.
 
-## 🚀 Features
-- Random 1-on-1 video chat
-- Model earnings system (70% revenue share)
-- No registration required (browser fingerprint)
-- Modern UI with Tailwind CSS
-- Real-time notifications
-- Private paid chats
-- UPI/Bank withdrawals
+## Features
 
-## 📦 Installation
+- 🎥 **Random 1-on-1 Video Calls** - Connect instantly with random users
+- 🌍 **Global Reach** - Chat with people from different countries
+- 🔒 **Privacy Focused** - No registration required
+- 💬 **Real-time Chat** - Text chat alongside video
+- 📱 **Responsive Design** - Works on desktop and mobile
+- 🎮 **Easy Controls** - Intuitive interface for everyone
+- 🛡️ **Safety Features** - User reporting and moderation
 
-1. Clone the repository:
+## Tech Stack
+
+- **Frontend**: HTML5, CSS3, JavaScript (ES6+)
+- **Backend**: Node.js, Express.js
+- **Real-time**: Socket.IO, WebRTC
+- **Database**: Firebase Firestore (optional)
+- **Hosting**: Render (Free tier compatible)
+
+## Setup Instructions
+
+### 1. Prerequisites
+- Node.js 16+ installed
+- Firebase account (optional)
+- Render account (for deployment)
+
+### 2. Local Development
+
 ```bash
-git clone https://github.com/yourusername/quikchat-pro.git
-cd quikchat-pro
+# Clone the repository
+git clone <your-repo-url>
+cd quikchat-global
+
+# Install dependencies
+npm install
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your configuration
+
+# For Firebase (optional)
+# Download your Firebase service account key
+# Save as firebase-service-account.json
+
+# Start development server
+npm run dev
