@@ -625,57 +625,62 @@ button:disabled {
     overflow: hidden;
 }
 
-/* Video Section */
+/* ================= Video Section ================= */
 .video-section {
     flex: 1;
     display: flex;
     flex-direction: column;
     padding: 24px;
     gap: 24px;
+    position: relative;
+    background: var(--bg-secondary);
 }
 
 .video-container {
     flex: 1;
     position: relative;
+    width: 100%;
+    height: 100%;
     border-radius: var(--radius-lg);
     overflow: hidden;
-    background: var(--bg-secondary);
+    background: #000;
     border: 1px solid var(--border-color);
 }
 
-.video-wrapper {
+/* Remote Video - Fullscreen */
+#remoteVideo {
     position: absolute;
-    width: 100%;
-    height: 100%;
-    background: #000;
-}
-
-.local-video {
-    z-index: 1;
-}
-
-.remote-video {
-    z-index: 2;
-    width: 280px !important;
-    height: 210px !important;
-    top: 24px;
-    right: 24px;
-    border-radius: var(--radius-md);
-    border: 3px solid var(--border-color);
-    box-shadow: var(--shadow-xl);
-    transition: all var(--transition-normal);
-}
-
-.remote-video:hover {
-    transform: scale(1.02);
-}
-
-.video-wrapper video {
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border-radius: var(--radius-lg);
+    z-index: 1;
 }
 
+/* Local Video - PIP mode */
+#localVideo {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    width: 25%;            /* Adjust PIP size */
+    max-width: 200px;      /* Prevent too big on desktop */
+    aspect-ratio: 4/3;     /* Maintain ratio */
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-color);
+    box-shadow: var(--shadow-xl);
+    z-index: 2;
+    object-fit: cover;
+    transition: all 0.3s ease;
+}
+
+/* Hover effect on local video */
+#localVideo:hover {
+    transform: scale(1.05);
+}
+
+/* Video Overlay */
 .video-overlay {
     position: absolute;
     top: 0;
@@ -687,8 +692,10 @@ button:disabled {
     flex-direction: column;
     justify-content: space-between;
     padding: 16px;
+    z-index: 3;
 }
 
+/* User Info Overlay */
 .user-info {
     display: flex;
     align-items: center;
@@ -726,12 +733,15 @@ button:disabled {
     color: var(--text-secondary);
 }
 
+/* Video Controls */
 .video-controls,
 .call-controls {
     display: flex;
     gap: 8px;
+    z-index: 4;
 }
 
+/* Connection Status */
 .connection-status {
     position: absolute;
     top: 50%;
@@ -742,6 +752,7 @@ button:disabled {
     align-items: center;
     gap: 12px;
     color: var(--text-secondary);
+    z-index: 5;
 }
 
 .loading-spinner {
@@ -754,34 +765,55 @@ button:disabled {
 }
 
 @keyframes spin {
-    to {
-        transform: rotate(360deg);
+    to { transform: rotate(360deg); }
+}
+
+/* ===== Responsive Adjustments ===== */
+@media (max-width: 768px) {
+    .video-section {
+        padding: 12px;
+    }
+
+    #localVideo {
+        width: 35%;  /* Mobile PIP bigger */
+        bottom: 10px;
+        right: 10px;
+    }
+
+    #remoteVideo {
+        border-radius: 0;
+    }
+
+    .video-overlay {
+        padding: 10px;
+    }
+
+    .video-controls, .call-controls {
+        flex-wrap: wrap;
+        justify-content: center;
     }
 }
 
-/* Call Controls Bar */
-.call-controls-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 32px;
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--border-color);
-}
+/* Mobile Landscape */
+@media (orientation: landscape) and (max-width: 900px) {
+    .video-section {
+        flex-direction: row;
+    }
 
-.control-group {
-    display: flex;
-    gap: 12px;
-}
+    .video-container {
+        height: calc(100vh - 150px);
+    }
 
-.center-controls {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
+    .call-controls-bar {
+        flex-direction: column;
+        height: 150px;
+        width: 100px;
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+    }
 }
-
 /* Chat Section */
 .chat-section {
     width: 400px;
