@@ -3,256 +3,407 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
-const admin = require('firebase-admin');
 const helmet = require('helmet');
+const compression = require('compression');
+const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 
-// Initialize Firebase
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
-
-if (Object.keys(serviceAccount).length > 0) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: process.env.FIREBASE_DATABASE_URL
-  });
-}
-
-const db = admin.database();
+// Initialize Express
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: process.env.NODE_ENV === 'production' 
+      ? process.env.FRONTEND_URL 
+      : "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
 app.use(cors());
+app.use(compression());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static('public'));
 
-// Store active users
-const activeUsers = new Map();
-const waitingUsers = [];
-const activeCalls = new Map();
+// Store active connections
+const activeUsers = new Map(); // socketId -> userData
+const waitingQueue = new Map(); // userId -> socketId
+const activeCalls = new Map(); // callId -> {user1, user2}
 
-// API Routes
-app.get('/api/stats', (req, res) => {
-  res.json({
-    online: activeUsers.size,
-    activeCalls: activeCalls.size,
-    waiting: waitingUsers.length
-  });
-});
-
-app.post('/api/create-payment', async (req, res) => {
-  const { userId, amount } = req.body;
-  
-  // Razorpay integration placeholder
-  const order = {
-    id: `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    amount: amount * 100, // in paise
-    currency: 'INR'
-  };
-  
-  res.json(order);
-});
-
-// Socket.IO Events
+// Socket.IO Connection Handler
 io.on('connection', (socket) => {
-  console.log('New user connected:', socket.id);
-  
-  socket.on('register-user', async (userData) => {
-    const { fingerprint, username, age, country, bio, photo, gender, isModel, perMinuteRate } = userData;
-    
-    const user = {
-      socketId: socket.id,
-      userId: fingerprint,
-      username,
-      age,
-      country,
-      bio,
-      photo,
-      gender,
-      isModel: isModel || false,
-      perMinuteRate: perMinuteRate || 0,
-      balance: 0,
-      earnings: 0,
-      joinedAt: Date.now(),
-      isOnline: true
-    };
-    
-    // Save to active users
-    activeUsers.set(socket.id, user);
-    
-    // Save to Firebase
+  console.log('✅ New connection:', socket.id);
+
+  // Join user
+  socket.on('join', async (userData) => {
     try {
-      await db.ref(`users/${fingerprint}`).set(user);
-    } catch (err) {
-      console.error('Firebase save error:', err);
-    }
-    
-    socket.emit('user-registered', user);
-    io.emit('online-count', activeUsers.size);
-  });
-  
-  socket.on('find-random-match', async (preferences) => {
-    const user = activeUsers.get(socket.id);
-    if (!user) return;
-    
-    // Remove from waiting if already there
-    const index = waitingUsers.indexOf(socket.id);
-    if (index > -1) waitingUsers.splice(index, 1);
-    
-    // Add to waiting list
-    waitingUsers.push(socket.id);
-    
-    // Try to find match
-    findMatch(socket.id, preferences);
-  });
-  
-  socket.on('request-private-chat', async (data) => {
-    const { toUserId, coinsPerMinute } = data;
-    const fromUser = activeUsers.get(socket.id);
-    
-    // Find target user's socket
-    let targetSocketId = null;
-    for (let [sid, user] of activeUsers) {
-      if (user.userId === toUserId) {
-        targetSocketId = sid;
-        break;
+      console.log('📥 Join request:', userData);
+      
+      // Validate user data
+      if (!userData || !userData.userId) {
+        socket.emit('error', { message: 'Invalid user data' });
+        return;
       }
-    }
-    
-    if (targetSocketId && fromUser) {
-      io.to(targetSocketId).emit('private-request', {
-        fromUser: {
-          userId: fromUser.userId,
-          username: fromUser.username,
-          age: fromUser.age,
-          country: fromUser.country,
-          photo: fromUser.photo
-        },
-        coinsPerMinute: coinsPerMinute,
-        requestId: `req_${Date.now()}`
-      });
-    }
-  });
-  
-  socket.on('accept-private-chat', async (data) => {
-    const { requestId, fromUserId, coinsPerMinute } = data;
-    const modelUser = activeUsers.get(socket.id);
-    
-    // Find requester's socket
-    let requesterSocketId = null;
-    for (let [sid, user] of activeUsers) {
-      if (user.userId === fromUserId) {
-        requesterSocketId = sid;
-        break;
+
+      const userId = userData.userId;
+      const username = userData.username || 'Anonymous';
+      
+      // Check if user is already connected
+      for (const [existingSocketId, existingUser] of activeUsers.entries()) {
+        if (existingUser.userId === userId && existingSocketId !== socket.id) {
+          // Disconnect previous connection
+          const oldSocket = io.sockets.sockets.get(existingSocketId);
+          if (oldSocket) {
+            oldSocket.disconnect();
+          }
+          activeUsers.delete(existingSocketId);
+          break;
+        }
       }
-    }
-    
-    if (requesterSocketId && modelUser) {
-      // Create private room
-      const roomId = `private_${fromUserId}_${modelUser.userId}`;
-      
-      // Join both to room
-      socket.join(roomId);
-      io.sockets.sockets.get(requesterSocketId)?.join(roomId);
-      
-      // Notify both
-      io.to(roomId).emit('private-chat-started', {
-        roomId,
-        coinsPerMinute,
-        modelUser,
-        startedAt: Date.now()
+
+      // Create user object
+      const userWithId = {
+        ...userData,
+        userId,
+        username,
+        socketId: socket.id,
+        joinedAt: new Date().toISOString(),
+        status: 'online'
+      };
+
+      // Store user
+      socket.userId = userId;
+      activeUsers.set(socket.id, userWithId);
+
+      // Send success
+      socket.emit('joined', {
+        userId,
+        message: 'Successfully joined QUIKCHAT Global'
       });
-      
-      // Track call
-      activeCalls.set(roomId, {
-        roomId,
-        modelId: modelUser.userId,
-        userId: fromUserId,
-        coinsPerMinute,
-        startedAt: Date.now(),
-        coinsDeducted: 0
+
+      // Update online count
+      io.emit('online-count', {
+        count: activeUsers.size
       });
+
+      console.log(`✅ User joined: ${username} (${userId})`);
+
+    } catch (error) {
+      console.error('❌ Join error:', error);
+      socket.emit('error', { message: 'Failed to join' });
     }
   });
-  
+
+  // Find random partner
+  socket.on('find-partner', async (userData) => {
+    try {
+      console.log('🔍 Find partner request from:', socket.id);
+      
+      const currentUser = activeUsers.get(socket.id);
+      if (!currentUser) {
+        console.log('❌ User not registered in activeUsers');
+        socket.emit('error', { message: 'User not registered. Please join first.' });
+        return;
+      }
+
+      // Check if already in queue
+      if (waitingQueue.has(currentUser.userId)) {
+        socket.emit('status', { status: 'already-waiting' });
+        return;
+      }
+
+      // Check if already in a call
+      for (const [callId, call] of activeCalls.entries()) {
+        if (call.user1.socketId === socket.id || call.user2.socketId === socket.id) {
+          socket.emit('error', { message: 'Already in a call' });
+          return;
+        }
+      }
+
+      // Check queue for available partners
+      if (waitingQueue.size > 0) {
+        // Find first available partner
+        const [partnerId, partnerSocketId] = Array.from(waitingQueue.entries())[0];
+        const partnerSocket = io.sockets.sockets.get(partnerSocketId);
+
+        if (partnerSocket && partnerSocket.connected) {
+          // Create call ID
+          const callId = uuidv4();
+          
+          // Remove from queue
+          waitingQueue.delete(currentUser.userId);
+          waitingQueue.delete(partnerId);
+
+          // Store call
+          activeCalls.set(callId, {
+            user1: {
+              userId: currentUser.userId,
+              socketId: socket.id,
+              userData: currentUser
+            },
+            user2: {
+              userId: partnerId,
+              socketId: partnerSocketId,
+              userData: activeUsers.get(partnerSocketId)
+            },
+            createdAt: new Date().toISOString()
+          });
+
+          // Notify both users
+          socket.emit('partner-found', {
+            callId,
+            partner: activeUsers.get(partnerSocketId),
+            role: 'caller'
+          });
+
+          partnerSocket.emit('partner-found', {
+            callId,
+            partner: currentUser,
+            role: 'callee'
+          });
+
+          console.log(`✅ Match made: ${currentUser.userId} ↔ ${partnerId}`);
+          return;
+        } else {
+          // Clean up stale connection
+          waitingQueue.delete(partnerId);
+        }
+      }
+
+      // Add to waiting queue
+      waitingQueue.set(currentUser.userId, socket.id);
+      socket.emit('status', { 
+        status: 'waiting', 
+        position: waitingQueue.size,
+        estimatedWait: Math.max(5, waitingQueue.size * 3)
+      });
+
+      console.log(`⏳ User added to queue: ${currentUser.userId}`);
+
+    } catch (error) {
+      console.error('❌ Find partner error:', error);
+      socket.emit('error', { message: 'Failed to find partner' });
+    }
+  });
+
+  // WebRTC Signaling
   socket.on('webrtc-signal', (data) => {
-    const { to, signal } = data;
-    io.to(to).emit('webrtc-signal', {
-      from: socket.id,
-      signal: signal
-    });
+    try {
+      const { callId, signal, type } = data;
+      const call = activeCalls.get(callId);
+      
+      if (!call) {
+        socket.emit('error', { message: 'Call not found' });
+        return;
+      }
+
+      // Find partner socket
+      const partnerSocketId = 
+        call.user1.socketId === socket.id ? call.user2.socketId : call.user1.socketId;
+      const partnerSocket = io.sockets.sockets.get(partnerSocketId);
+
+      if (partnerSocket) {
+        partnerSocket.emit('webrtc-signal', {
+          callId,
+          signal,
+          type,
+          from: socket.id
+        });
+      }
+    } catch (error) {
+      console.error('WebRTC signal error:', error);
+    }
   });
-  
+
+  // Send message
+  socket.on('send-message', (data) => {
+    try {
+      const { callId, message, type = 'text' } = data;
+      const call = activeCalls.get(callId);
+      
+      if (!call) return;
+
+      const partnerSocketId = 
+        call.user1.socketId === socket.id ? call.user2.socketId : call.user1.socketId;
+      const partnerSocket = io.sockets.sockets.get(partnerSocketId);
+
+      if (partnerSocket) {
+        const sender = activeUsers.get(socket.id);
+        partnerSocket.emit('receive-message', {
+          message,
+          type,
+          from: sender.userId,
+          senderName: sender.username,
+          timestamp: new Date().toISOString()
+        });
+      }
+    } catch (error) {
+      console.error('Send message error:', error);
+    }
+  });
+
+  // Next partner request
+  socket.on('next-partner', () => {
+    try {
+      // Find current call
+      let currentCallId = null;
+      for (const [callId, call] of activeCalls.entries()) {
+        if (call.user1.socketId === socket.id || call.user2.socketId === socket.id) {
+          currentCallId = callId;
+          break;
+        }
+      }
+
+      if (currentCallId) {
+        const call = activeCalls.get(currentCallId);
+        
+        // Notify partner
+        const partnerSocketId = 
+          call.user1.socketId === socket.id ? call.user2.socketId : call.user1.socketId;
+        const partnerSocket = io.sockets.sockets.get(partnerSocketId);
+        
+        if (partnerSocket) {
+          partnerSocket.emit('partner-left', {
+            reason: 'partner_skipped'
+          });
+        }
+
+        // Remove call
+        activeCalls.delete(currentCallId);
+      }
+
+      console.log(`🔄 User requested next partner: ${socket.id}`);
+
+    } catch (error) {
+      console.error('Next partner error:', error);
+    }
+  });
+
+  // Report user
+  socket.on('report-user', async (data) => {
+    try {
+      const { reportedUserId, reason, details } = data;
+      
+      console.log(`🚨 Report submitted: ${reportedUserId} - ${reason}`);
+      
+      socket.emit('report-submitted', {
+        success: true,
+        message: 'Report submitted successfully'
+      });
+
+    } catch (error) {
+      console.error('Report error:', error);
+      socket.emit('error', { message: 'Failed to submit report' });
+    }
+  });
+
+  // Disconnect
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    
-    // Remove from active users
-    activeUsers.delete(socket.id);
-    
-    // Remove from waiting
-    const index = waitingUsers.indexOf(socket.id);
-    if (index > -1) waitingUsers.splice(index, 1);
-    
-    io.emit('online-count', activeUsers.size);
+    try {
+      const userData = activeUsers.get(socket.id);
+      if (!userData) return;
+
+      const userId = userData.userId;
+
+      // Remove from active users
+      activeUsers.delete(socket.id);
+
+      // Remove from waiting queue
+      waitingQueue.delete(userId);
+
+      // Find and end active calls
+      for (const [callId, call] of activeCalls.entries()) {
+        if (call.user1.socketId === socket.id || call.user2.socketId === socket.id) {
+          // Notify partner
+          const partnerSocketId = 
+            call.user1.socketId === socket.id ? call.user2.socketId : call.user1.socketId;
+          const partnerSocket = io.sockets.sockets.get(partnerSocketId);
+          
+          if (partnerSocket) {
+            partnerSocket.emit('partner-disconnected', {
+              reason: 'disconnected'
+            });
+          }
+
+          activeCalls.delete(callId);
+          break;
+        }
+      }
+
+      // Update online count
+      io.emit('online-count', {
+        count: activeUsers.size
+      });
+
+      console.log(`❌ User disconnected: ${userId}`);
+
+    } catch (error) {
+      console.error('Disconnect cleanup error:', error);
+    }
   });
 });
 
-// Matchmaking function
-function findMatch(socketId, preferences) {
-  if (waitingUsers.length < 2) return;
-  
-  const user1 = activeUsers.get(socketId);
-  if (!user1) return;
-  
-  // Find compatible match
-  for (let i = 0; i < waitingUsers.length; i++) {
-    const otherId = waitingUsers[i];
-    if (otherId === socketId) continue;
-    
-    const user2 = activeUsers.get(otherId);
-    if (!user2) continue;
-    
-    // Check preferences
-    if (preferences.gender && preferences.gender !== 'any') {
-      if (preferences.gender !== user2.gender) continue;
+// Helper function to cleanup waiting queue
+function cleanupWaitingQueue() {
+  for (const [userId, socketId] of waitingQueue.entries()) {
+    const socket = io.sockets.sockets.get(socketId);
+    if (!socket || !socket.connected) {
+      waitingQueue.delete(userId);
     }
-    
-    if (preferences.country && preferences.country !== 'any') {
-      if (preferences.country !== user2.country) continue;
-    }
-    
-    // Found match - create room
-    const roomId = `room_${socketId}_${otherId}`;
-    
-    // Remove both from waiting
-    const index1 = waitingUsers.indexOf(socketId);
-    const index2 = waitingUsers.indexOf(otherId);
-    if (index1 > -1) waitingUsers.splice(index1, 1);
-    if (index2 > -1) waitingUsers.splice(index2, 1);
-    
-    // Join room
-    io.sockets.sockets.get(socketId)?.join(roomId);
-    io.sockets.sockets.get(otherId)?.join(roomId);
-    
-    // Send match info
-    io.to(roomId).emit('match-found', {
-      roomId,
-      user1: user1,
-      user2: user2
-    });
-    
-    break;
   }
 }
 
+// Set up periodic cleanup
+setInterval(cleanupWaitingQueue, 30000);
+
+// API Routes
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    activeUsers: activeUsers.size,
+    waitingQueue: waitingQueue.size,
+    activeCalls: activeCalls.size
+  });
+});
+
+app.get('/api/stats', (req, res) => {
+  res.json({
+    activeUsers: activeUsers.size,
+    waitingQueue: waitingQueue.size,
+    activeCalls: activeCalls.size,
+    uptime: process.uptime()
+  });
+});
+
+// Serve main page
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`
+  ⚡ QUIKCHAT Global Server ⚡
+  ----------------------------
+  Server running on port ${PORT}
+  Mode: ${process.env.NODE_ENV || 'development'}
+  Health check: http://localhost:${PORT}/api/health
+  ----------------------------
+  `);
 });
+
+module.exports = { app, server, io };
