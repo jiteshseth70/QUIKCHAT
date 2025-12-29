@@ -1,7 +1,7 @@
 {
-  "name": "quikchat-pro",
-  "version": "3.0.0",
-  "description": "Modern Random Video Chat Platform",
+  "name": "quikchat-global",
+  "version": "1.0.0",
+  "description": "Random 1-on-1 video chat platform",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -9,13 +9,12 @@
   },
   "dependencies": {
     "express": "^4.18.2",
-    "socket.io": "^4.6.1",
-    "firebase-admin": "^11.11.0",
-    "dotenv": "^16.3.1",
+    "socket.io": "^4.7.2",
     "cors": "^2.8.5",
+    "helmet": "^7.0.0",
+    "compression": "^1.7.4",
     "uuid": "^9.0.0",
-    "node-fetch": "^3.3.1",
-    "helmet": "^7.0.0"
+    "dotenv": "^16.0.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
