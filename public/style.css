@@ -1,14 +1,15 @@
-/* --- Global Styles --- */
+/* --- Global Styles & Variables --- */
 :root {
-    --primary-color: #3b82f6;
-    --primary-hover: #2563eb;
-    --danger-color: #ef4444;
+    --primary-color: #00d2ff;
+    --primary-hover: #0099cc;
+    --danger-color: #ff4757;
     --bg-dark: #0b1220;
-    --card-bg: #1e293b;
-    --text-main: #f8fafc;
+    --bg-card: #161f30;
+    --text-main: #ffffff;
     --text-muted: #94a3b8;
-    --accent-color: #fbbf24;
-    --glass: rgba(255, 255, 255, 0.05);
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --border-color: rgba(255, 255, 255, 0.1);
+    --transition: all 0.3s ease;
 }
 
 * {
@@ -21,8 +22,9 @@
 body {
     background-color: var(--bg-dark);
     color: var(--text-main);
+    overflow: hidden; /* Prevent scrolling during chat */
     height: 100vh;
-    overflow: hidden;
+    width: 100vw;
 }
 
 .hidden { display: none !important; }
@@ -30,103 +32,83 @@ body {
 /* --- Setup Overlay (Landing Page) --- */
 .overlay {
     position: fixed;
-    inset: 0;
-    background: radial-gradient(circle at top, #1e293b, #0b1220);
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at center, #1e293b 0%, #0b1220 100%);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    padding: 20px;
 }
 
 .setup-container {
-    background: var(--card-bg);
-    padding: 2rem;
+    background: var(--bg-card);
+    padding: 2.5rem;
     border-radius: 20px;
-    width: 100%;
+    width: 90%;
     max-width: 450px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    border: 1px solid var(--border-color);
 }
 
-.logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: var(--primary-color);
-    font-size: 1.2rem;
-    margin-bottom: 5px;
-}
+.setup-header { text-align: center; margin-bottom: 2rem; }
+.logo { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--primary-color); }
+.logo i { font-size: 2rem; }
+.tagline { color: var(--text-muted); font-size: 0.9rem; margin-top: 5px; }
 
-.tagline { color: var(--text-muted); margin-bottom: 2rem; }
-
-.form-group { margin-bottom: 1.5rem; }
-
-.form-group label {
-    display: block;
-    margin-bottom: 8px;
-    font-size: 0.9rem;
-    color: var(--text-muted);
-}
+.form-group { margin-bottom: 1.2rem; }
+.form-group label { display: block; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-muted); }
 
 input, select {
     width: 100%;
-    padding: 12px;
+    padding: 12px 15px;
     background: #0f172a;
-    border: 1px solid #334155;
-    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
     color: white;
     outline: none;
 }
 
-input:focus, select:focus { border-color: var(--primary-color); }
-
 .btn-primary {
     width: 100%;
-    padding: 14px;
+    padding: 15px;
     background: var(--primary-color);
     border: none;
-    border-radius: 8px;
-    color: white;
-    font-weight: 600;
+    border-radius: 10px;
+    color: #fff;
+    font-weight: 700;
     cursor: pointer;
-    transition: 0.3s;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
 }
 
 .btn-primary:hover { background: var(--primary-hover); transform: translateY(-2px); }
 
-/* --- Top Bar --- */
+/* --- Main App Layout --- */
 .topbar {
     height: 70px;
-    background: var(--card-bg);
+    padding: 0 2rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 2rem;
-    border-bottom: 1px solid var(--glass);
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-color);
 }
 
-.status-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    display: inline-block;
-}
-.status-dot.offline { background: var(--danger-color); }
-.status-dot.online { background: #10b981; }
-
-.stats { display: flex; gap: 20px; }
-.stat { font-size: 0.9rem; display: flex; align-items: center; gap: 5px; }
-.coins { color: var(--accent-color); font-weight: bold; }
-
-/* --- Main Content Layout --- */
 .main-content {
     display: grid;
     grid-template-columns: 1fr 350px;
     height: calc(100vh - 70px);
 }
 
+/* --- Video Section --- */
 .video-section {
+    position: relative;
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -137,7 +119,7 @@ input:focus, select:focus { border-color: var(--primary-color); }
     flex: 1;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 20px;
+    gap: 15px;
     position: relative;
 }
 
@@ -146,7 +128,7 @@ input:focus, select:focus { border-color: var(--primary-color); }
     border-radius: 15px;
     overflow: hidden;
     position: relative;
-    border: 2px solid var(--glass);
+    border: 2px solid var(--border-color);
 }
 
 video {
@@ -154,6 +136,9 @@ video {
     height: 100%;
     object-fit: cover;
 }
+
+/* Local Video (Small Overlay style optional, but here split screen) */
+.local-video { border-color: var(--primary-color); }
 
 .video-overlay {
     position: absolute;
@@ -167,19 +152,20 @@ video {
     align-items: flex-end;
 }
 
-/* --- Call Controls Bar --- */
+/* --- Controls Bar --- */
 .call-controls-bar {
-    background: var(--card-bg);
-    padding: 15px;
+    height: 80px;
+    background: var(--bg-card);
     border-radius: 15px;
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
 }
 
 .control-btn-large {
-    background: var(--glass);
-    border: none;
+    background: var(--glass-bg);
+    border: 1px solid var(--border-color);
     color: white;
     padding: 10px 15px;
     border-radius: 8px;
@@ -191,36 +177,35 @@ video {
 
 /* --- Chat Section --- */
 .chat-section {
-    background: #0f172a;
-    border-left: 1px solid var(--glass);
+    background: var(--bg-card);
+    border-left: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
 }
 
 .chat-header {
     padding: 20px;
-    border-bottom: 1px solid var(--glass);
+    border-bottom: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;
 }
 
 .chat-messages {
     flex: 1;
+    padding: 20px;
     overflow-y: auto;
-    padding: 15px;
 }
 
-.message-bubble {
-    background: var(--card-bg);
-    padding: 10px;
+.message-bubble.system {
+    background: rgba(0, 210, 255, 0.1);
+    padding: 15px;
     border-radius: 10px;
-    margin-bottom: 10px;
-    max-width: 85%;
+    border-left: 4px solid var(--primary-color);
 }
 
 .chat-input {
-    padding: 15px;
-    background: var(--card-bg);
+    padding: 20px;
+    background: var(--bg-dark);
 }
 
 .input-wrapper {
@@ -229,47 +214,45 @@ video {
     margin-top: 10px;
 }
 
-/* --- Loading Overlay --- */
-.loading-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.8);
-    backdrop-filter: blur(10px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    z-index: 2000;
-}
-
-.loading-spinner-large {
-    width: 60px;
-    height: 60px;
-    border: 5px solid var(--glass);
-    border-top: 5px solid var(--primary-color);
+/* --- Status & Stats --- */
+.status-dot {
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 20px;
+    display: inline-block;
 }
+.offline { background: #ff4757; }
+.online { background: #2ed573; }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+.stats { display: flex; gap: 20px; }
+.stat { font-size: 0.85rem; color: var(--text-muted); }
+.stat i { color: var(--primary-color); }
 
-/* --- Mobile Responsive --- */
-@media (max-width: 900px) {
+/* --- Responsive Design --- */
+@media (max-width: 992px) {
     .main-content {
         grid-template-columns: 1fr;
     }
     .chat-section {
-        display: none; /* Mobile pe toggle chat use hoga */
         position: fixed;
-        bottom: 0;
+        right: -100%;
+        top: 70px;
+        height: calc(100vh - 70px);
         width: 100%;
-        height: 50%;
-        z-index: 500;
+        transition: 0.3s;
+        z-index: 100;
     }
+    .chat-section.active { right: 0; }
+    
     .video-container {
         grid-template-columns: 1fr;
         grid-template-rows: 1fr 1fr;
     }
-    .topbar .actions span { display: none; }
+}
+
+@media (max-width: 600px) {
+    .topbar h1, .btn-primary span, .control-btn-large span {
+        display: none;
+    }
+    .setup-container { padding: 1.5rem; }
 }
